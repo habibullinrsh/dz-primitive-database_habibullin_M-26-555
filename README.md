@@ -33,5 +33,3 @@ $ database
 
 >>> Введите команду: drop_table users
 Таблица "users" успешно удалена.
-
-<script id="asciicast-2SdGOVbUBcYIzVxI" src="https://asciinema.org/a/2SdGOVbUBcYIzVxI.js" async></script>
