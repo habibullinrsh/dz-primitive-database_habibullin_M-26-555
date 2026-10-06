@@ -1,5 +1,7 @@
 ## Управление таблицами
 
+<script id="asciicast-2SdGOVbUBcYIzVxI" src="https://asciinema.org/a/2SdGOVbUBcYIzVxI.js" async></script>
+
 ### Команды
 
 | Команда | Описание |
