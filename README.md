@@ -33,6 +33,7 @@ $ database
 
 >>> Введите команду: drop_table users
 Таблица "users" успешно удалена.
+```
 
 ## CRUD-операции
 
@@ -73,3 +74,4 @@ $ database
 Таблица: users
 Столбцы: ID:int, name:str, age:int, is_active:bool
 Количество записей: 0
+```
