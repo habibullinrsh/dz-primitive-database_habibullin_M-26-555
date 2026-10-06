@@ -15,6 +15,7 @@ from primitive_db.core import (
     select,
     update,
 )
+from primitive_db.decorators import cacher
 from primitive_db.parser import (
     parse_set_clause,
     parse_values,
@@ -108,8 +109,9 @@ def run():
                     continue
                 table_name = args[1]
                 columns = args[2:]
-                try:
-                    metadata = create_table(metadata, table_name, columns)
+                result = create_table(metadata, table_name, columns)
+                if result is not None:
+                    metadata = result
                     save_metadata(META_FILE, metadata)
                     col_names = ", ".join(
                         f"{col['name']}:{col['type']}"
@@ -119,21 +121,17 @@ def run():
                         f'Таблица "{table_name}" успешно создана '
                         f'со столбцами: {col_names}'
                     )
-                except ValueError as e:
-                    print(f"Ошибка: {e}")
             case "drop_table":
                 if len(args) != 2:
                     print("Некорректное значение. Попробуйте снова.")
                     continue
                 table_name = args[1]
-                try:
-                    metadata = drop_table(metadata, table_name)
+                result = drop_table(metadata, table_name)
+                if result is not None:
+                    metadata = result
                     save_metadata(META_FILE, metadata)
                     print(f'Таблица "{table_name}" успешно удалена.')
-                except KeyError as e:
-                    print(f"Ошибка: {e}")
             case "insert":
-                # insert into <table> values (val1, val2, ...)
                 if (
                     len(args) < 4
                     or args[1] != "into"
@@ -148,31 +146,28 @@ def run():
                         f'не существует.'
                     )
                     continue
-                # Собираем всё после 'values' в одну строку
                 values_part = " ".join(args[4:])
-                # Убираем внешние скобки
                 values_part = values_part.strip("() ")
-                # Разбиваем по запятым и очищаем
                 raw_values = [v.strip() for v in values_part.split(",")]
-                try:
-                    values = parse_values(raw_values)
-                    table_data = insert(metadata, table_name, values)
-                    save_table_data(table_name, table_data)
-                    new_id = table_data[-1]["ID"]
+                values = parse_values(raw_values)
+                result = insert(metadata, table_name, values)
+                if result is not None:
+                    save_table_data(table_name, result)
+                    new_id = result[-1]["ID"]
                     print(
                         f'Запись с ID={new_id} успешно добавлена '
                         f'в таблицу "{table_name}".'
                     )
-                except (KeyError, ValueError) as e:
-                    print(f"Ошибка: {e}")
             case "select":
-                # select from <table> [where column = value]
                 if len(args) < 3 or args[1] != "from":
                     print("Некорректное значение. Попробуйте снова.")
                     continue
                 table_name = args[2]
                 if table_name not in metadata:
-                    print(f'Ошибка: Таблица "{table_name}" не существует.')
+                    print(
+                        f'Ошибка: Таблица "{table_name}" '
+                        f'не существует.'
+                    )
                     continue
                 where_clause = None
                 if len(args) > 3 and args[3] == "where":
@@ -182,14 +177,20 @@ def run():
                         print(f"Ошибка: {e}")
                         continue
                 table_data = load_table_data(table_name)
-                result = select(table_data, where_clause)
+
+                # Кэширование результата select
+                cache_key = (table_name, str(where_clause))
+                result = cacher(
+                    cache_key,
+                    lambda td=table_data, wc=where_clause: select(td, wc),
+                )
+
                 columns = metadata[table_name]["columns"]
-                if not result:
+                if result is None or not result:
                     print("Записи не найдены.")
                 else:
                     _print_table(result, columns)
             case "update":
-                # update <table> set col=val where col=val
                 if (
                     len(args) < 6
                     or args[2] != "set"
@@ -199,7 +200,10 @@ def run():
                     continue
                 table_name = args[1]
                 if table_name not in metadata:
-                    print(f'Ошибка: Таблица "{table_name}" не существует.')
+                    print(
+                        f'Ошибка: Таблица "{table_name}" '
+                        f'не существует.'
+                    )
                     continue
                 where_idx = args.index("where")
                 set_args = args[3:where_idx]
@@ -211,19 +215,18 @@ def run():
                     print(f"Ошибка: {e}")
                     continue
                 table_data = load_table_data(table_name)
-                table_data, count = update(
-                    table_data, set_clause, where_clause
-                )
-                save_table_data(table_name, table_data)
-                if count > 0:
-                    print(
-                        f'Запись с ID={table_data[0]["ID"]} '
-                        f'в таблице "{table_name}" успешно обновлена.'
-                    )
-                else:
-                    print("Записи для обновления не найдены.")
+                result = update(table_data, set_clause, where_clause)
+                if result is not None:
+                    table_data, count = result
+                    save_table_data(table_name, table_data)
+                    if count > 0:
+                        print(
+                            f'Запись в таблице "{table_name}" '
+                            f'успешно обновлена.'
+                        )
+                    else:
+                        print("Записи для обновления не найдены.")
             case "delete":
-                # delete from <table> where col=val
                 if (
                     len(args) < 5
                     or args[1] != "from"
@@ -233,7 +236,10 @@ def run():
                     continue
                 table_name = args[2]
                 if table_name not in metadata:
-                    print(f'Ошибка: Таблица "{table_name}" не существует.')
+                    print(
+                        f'Ошибка: Таблица "{table_name}" '
+                        f'не существует.'
+                    )
                     continue
                 try:
                     where_clause = parse_where_clause(args[4:])
@@ -241,29 +247,29 @@ def run():
                     print(f"Ошибка: {e}")
                     continue
                 table_data = load_table_data(table_name)
-                table_data, count = delete(table_data, where_clause)
-                save_table_data(table_name, table_data)
-                if count > 0:
-                    print(
-                        f'Запись с ID={where_clause.get("ID", "?")} '
-                        f'успешно удалена из таблицы "{table_name}".'
-                    )
-                else:
-                    print("Записи для удаления не найдены.")
+                result = delete(table_data, where_clause)
+                if result is not None:
+                    table_data, count = result
+                    save_table_data(table_name, table_data)
+                    if count > 0:
+                        print(
+                            f'Запись успешно удалена '
+                            f'из таблицы "{table_name}".'
+                        )
+                    else:
+                        print("Записи для удаления не найдены.")
             case "info":
                 if len(args) != 2:
                     print("Некорректное значение. Попробуйте снова.")
                     continue
                 table_name = args[1]
-                try:
-                    table_data = load_table_data(table_name)
-                    info = get_table_info(
-                        metadata, table_name, len(table_data)
-                    )
-                    print(f'Таблица: {info["name"]}')
-                    print(f'Столбцы: {info["columns"]}')
-                    print(f'Количество записей: {info["count"]}')
-                except KeyError as e:
-                    print(f"Ошибка: {e}")
+                table_data = load_table_data(table_name)
+                result = get_table_info(
+                    metadata, table_name, len(table_data)
+                )
+                if result is not None:
+                    print(f'Таблица: {result["name"]}')
+                    print(f'Столбцы: {result["columns"]}')
+                    print(f'Количество записей: {result["count"]}')
             case _:
                 print(f"Функции {command} нет. Попробуйте снова.")
