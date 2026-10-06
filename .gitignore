@@ -1,0 +1,7 @@
+.venv
+dist/
+__pycache__/
+*.egg-info
+db_meta.json
+data/
+demo_part*.cast
