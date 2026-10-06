@@ -1,3 +1,30 @@
+# Primitive DB
+
+[![asciinema](https://asciinema.org/a/NDB1LHmgYfCsauNw.svg)](https://asciinema.org/a/NDB1LHmgYfCsauNw)
+
+Консольное приложение, имитирующее работу с реляционной базой данных.
+Реализовано на Python с использованием процедурного подхода.
+
+## Возможности
+
+- Создание, удаление и просмотр таблиц
+- CRUD-операции: добавление, выборка, обновление и удаление записей
+- Поддержка типов данных: `int`, `str`, `bool`
+- Автоматическая генерация уникального `ID` для каждой записи
+- Сохранение метаданных и данных в JSON-файлах
+- Централизованная обработка ошибок через декораторы
+- Подтверждение опасных операций (удаление таблицы/записи)
+- Замер времени выполнения операций
+- Кэширование результатов запросов `select`
+
+## Установка
+
+```bash
+git clone https://github.com/habibullinrsh/dz-primitive-database_habibullin_M-26-555.git
+cd dz-primitive-database_habibullin_M-26-555
+uv sync
+```
+
 ## Управление таблицами
 
 [![asciinema](https://asciinema.org/a/2SdGOVbUBcYIzVxI.svg)](https://asciinema.org/a/2SdGOVbUBcYIzVxI)

@@ -1,8 +1,14 @@
 """Основная логика работы с таблицами и данными."""
 
 from primitive_db.constants import VALID_TYPES
+from primitive_db.decorators import (
+    confirm_action,
+    handle_db_errors,
+    log_time,
+)
 
 
+@handle_db_errors
 def create_table(metadata, table_name, columns):
     """Создает новую таблицу в метаданных.
 
@@ -46,6 +52,8 @@ def create_table(metadata, table_name, columns):
     return metadata
 
 
+@handle_db_errors
+@confirm_action("удаление таблицы")
 def drop_table(metadata, table_name):
     """Удаляет таблицу из метаданных.
 
@@ -67,43 +75,15 @@ def drop_table(metadata, table_name):
     return metadata
 
 
-def _validate_value(value, col_type):
-    """Проверяет и приводит значение к нужному типу.
-
-    Args:
-        value: строковое значение от пользователя.
-        col_type: ожидаемый тип ('int', 'str', 'bool').
-
-    Returns:
-        Приведенное значение.
-
-    Raises:
-        ValueError: если значение не соответствует типу.
-    """
-    if col_type == "int":
-        try:
-            return int(value)
-        except ValueError:
-            raise ValueError(f'Ожидалось целое число, получено "{value}".')
-    if col_type == "bool":
-        if value.lower() == "true":
-            return True
-        if value.lower() == "false":
-            return False
-        raise ValueError(
-            f'Ожидалось true/false, получено "{value}".'
-        )
-    # str
-    return str(value)
-
-
+@handle_db_errors
+@log_time
 def insert(metadata, table_name, values):
     """Добавляет новую запись в таблицу.
 
     Args:
         metadata: словарь метаданных.
         table_name: имя таблицы.
-        values: список значений (без ID), уже преобразованных к нужным типам.
+        values: список значений (без ID), уже преобразованных к типам.
 
     Returns:
         Список обновленных данных таблицы.
@@ -116,7 +96,7 @@ def insert(metadata, table_name, values):
         raise KeyError(f'Таблица "{table_name}" не существует.')
 
     columns = metadata[table_name]["columns"]
-    data_columns = columns[1:]  # все столбцы кроме ID
+    data_columns = columns[1:]
 
     if len(values) != len(data_columns):
         raise ValueError(
@@ -124,17 +104,14 @@ def insert(metadata, table_name, values):
             f'получено {len(values)}.'
         )
 
-    # Загружаем текущие данные таблицы
     from primitive_db.utils import load_table_data
     table_data = load_table_data(table_name)
 
-    # Генерация ID
     if table_data:
         new_id = max(row["ID"] for row in table_data) + 1
     else:
         new_id = 1
 
-    # Формируем запись
     record = {"ID": new_id}
     for col, val in zip(data_columns, values):
         record[col["name"]] = val
@@ -144,6 +121,8 @@ def insert(metadata, table_name, values):
     return table_data
 
 
+@handle_db_errors
+@log_time
 def select(table_data, where_clause=None):
     """Выбирает записи из таблицы.
 
@@ -169,6 +148,7 @@ def select(table_data, where_clause=None):
     return result
 
 
+@handle_db_errors
 def update(table_data, set_clause, where_clause):
     """Обновляет записи в таблице.
 
@@ -178,7 +158,7 @@ def update(table_data, set_clause, where_clause):
         where_clause: словарь условий поиска.
 
     Returns:
-        Список обновленных данных и количество измененных записей.
+        Кортеж (обновленные данные, количество изменений).
     """
     updated_count = 0
     for row in table_data:
@@ -194,6 +174,8 @@ def update(table_data, set_clause, where_clause):
     return table_data, updated_count
 
 
+@handle_db_errors
+@confirm_action("удаление записи")
 def delete(table_data, where_clause):
     """Удаляет записи из таблицы.
 
@@ -202,7 +184,7 @@ def delete(table_data, where_clause):
         where_clause: словарь условий для удаления.
 
     Returns:
-        Список оставшихся данных и количество удаленных записей.
+        Кортеж (оставшиеся данные, количество удалений).
     """
     original_count = len(table_data)
     filtered = []
@@ -218,6 +200,7 @@ def delete(table_data, where_clause):
     return filtered, deleted_count
 
 
+@handle_db_errors
 def get_table_info(metadata, table_name, data_count):
     """Формирует информацию о таблице.
 
